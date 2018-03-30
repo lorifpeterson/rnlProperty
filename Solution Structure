@@ -1,0 +1,29 @@
+Solution structure:
+
+Tests
+-> Application.Tests
+-> Specification.Tests
+
+Application
+-> Business
+-> Interface
+-> [Table]
+-> Commands -> AddCommand, Models
+-> Queries -> TableQuery, Models
+-> Rules
+
+Common
+-> Contracts
+-> Log4Net
+-> Models
+-> Util
+
+Domain
+-> Entities
+
+Persistence
+  DatabaseService
+  DataUnitOfWork
+  GenericRepository
+Service
+  Controllers, Views, Dependency Resolution, etc.
