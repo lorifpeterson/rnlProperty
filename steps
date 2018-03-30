@@ -1,0 +1,259 @@
+using IR.Application.Interfaces;
+using IR.Domain.Entities;
+using Moq;
+using System.Collections.Generic;
+using TechTalk.SpecFlow;
+using TechTalk.SpecFlow.Assist;
+using StructureMap;
+using IR.Specification.Tests.App_Start;
+using IR.Application.Business;
+using IR.Common.Models;
+using System.Net.Http;
+using System.Threading.Tasks;
+using System.Linq;
+using System.Net;
+using FluentAssertions;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+namespace IR.Specification.Tests.Steps
+{
+    [Binding]
+    public class UnmatchedInvoiceHandlingAPI_Steps
+    {
+        private const string differenceMessage = "because the actual contains {0} and the expected results should be {1}";
+
+        private IDataUnitOfWork _dataUnitOfWork;
+        private Mock<IDataUnitOfWork> _reposMock;
+        private IDatabaseService _databaseService;
+        private Mock<IDatabaseService> _databaseServiceMock;
+
+        private IContainer _container;
+
+        private HttpResponseMessage _actualResponse;
+        private IR_EVENT_LOG _actualEventLog;
+
+        private IEnumerable<CUST> _cust;
+        private IEnumerable<CUST_REF_TYPE> _custRefType;
+        private IEnumerable<IR_REF_TYPE> _irRefType;
+        private IEnumerable<LOCKBOX_CUST> _lockboxCust;
+        private IEnumerable<BAT> _bat;
+        private IEnumerable<TXN> _txn;
+        private IEnumerable<INV_IDEN_EXTRACT> _invIdenExtract;
+        private IEnumerable<PYMT> _pymt;
+        private IEnumerable<REM_WH_REF_ITEM> _remWhRefItem;
+        private IEnumerable<REM_WH_TXN_HST> _remWhTxnHst;
+
+        private List<INV> _inv;
+        private ICollection<REF_ITEM> _refItem;
+        private ICollection<INV_STS_HIST> _invStsHist;
+
+        [BeforeScenario]
+        public void Setup()
+        {
+            var defaultStringValueRetriever = Service.Instance.ValueRetrievers.FirstOrDefault(vr => vr is TechTalk.SpecFlow.Assist.ValueRetrievers.StringValueRetriever);
+            if (defaultStringValueRetriever != null)
+            {
+                Service.Instance.UnregisterValueRetriever(defaultStringValueRetriever);
+                Service.Instance.RegisterValueRetriever(new StringValueRetriver());
+            }
+
+            _inv = new List<INV>();
+            _invStsHist = new List<INV_STS_HIST>();
+
+            _databaseServiceMock = new Mock<IDatabaseService>();
+            _databaseServiceMock.Setup(r => r.IrEventLog.Add(It.IsAny<IR_EVENT_LOG>())).Callback<IR_EVENT_LOG>(p => _actualEventLog = p);
+
+            _reposMock = new Mock<IDataUnitOfWork>();
+            _reposMock.Setup(r => r.RefItemRepository.Add(It.IsAny<REF_ITEM>())).Callback<REF_ITEM>(p => _refItem.Add(p));
+            _reposMock.Setup(r => r.InvStsHistRepository.Add(It.IsAny<INV_STS_HIST>())).Callback<INV_STS_HIST>(p => _invStsHist.Add(p));
+            _reposMock.Setup(r => r.InvRepository.Update(It.IsAny<INV>())).Callback<INV>(p =>
+                {
+                    var index = _inv.FindIndex(i => i.INV_ID == p.INV_ID);
+                    if (index > -1) _inv[index] = p;
+                }
+            );
+
+            _reposMock.Setup(r => r.SaveChangesAsync()).ReturnsAsync(true);
+        }
+
+
+        [Given(@"the following CUST table info:")]
+        public void GivenTheFollowingCUSTTableInfo(Table table)
+        {
+            _cust = table.CreateSet<CUST>();
+            _reposMock.Setup(r => r.CustRepository.GetAll()).Returns(_cust.AsMockQueryableAsync().Object);
+        }
+
+        [Given(@"the following CUST_REF_TYPE table info:")]
+        public void GivenTheFollowingCUST_REF_TYPETableInfo(Table table)
+        {
+            _custRefType = table.CreateSet<CUST_REF_TYPE>();
+            _reposMock.Setup(r => r.CustRefTypeRepository.GetAll()).Returns(_custRefType.AsMockQueryableAsync().Object);
+        }
+
+        [Given(@"the following IR_REF_TYPE table info:")]
+        public void GivenTheFollowingIR_REF_TYPETableInfo(Table table)
+        {
+            _irRefType = table.CreateSet<IR_REF_TYPE>();
+            _reposMock.Setup(r => r.IrRefTypeRepository.GetAll()).Returns(_irRefType.AsMockQueryableAsync().Object);
+        }
+
+        [Given(@"the following LOCKBOX_CUST table info:")]
+        public void GivenTheFollowingLOCKBOX_CUSTTableInfo(Table table)
+        {
+            _lockboxCust = table.CreateSet<LOCKBOX_CUST>();
+            _reposMock.Setup(r => r.LockboxCustRepository.GetAll()).Returns(_lockboxCust.AsMockQueryableAsync().Object);
+        }
+
+        [Given(@"the following BAT table info:")]
+        public void GivenTheFollowingBATTableInfo(Table table)
+        {
+            _bat = table.CreateSet<BAT>();
+            _reposMock.Setup(r => r.BatRepository.GetAll()).Returns(_bat.AsMockQueryableAsync().Object);
+        }
+
+        [Given(@"the following TXN table info:")]
+        public void GivenTheFollowingTXNTableInfo(Table table)
+        {
+            _txn = table.CreateSet<TXN>();
+            _reposMock.Setup(r => r.TxnRepository.GetAll()).Returns(_txn.AsMockQueryableAsync().Object);
+        }
+
+        [Given(@"the following INV table info:")]
+        public void GivenTheFollowingINVTableInfo(Table table)
+        {
+            _inv = table.CreateSet<INV>().ToList();
+            _reposMock.Setup(r => r.InvRepository.GetAll()).Returns(_inv.AsMockQueryableAsync().Object);
+            _reposMock.Setup(r => r.InvRepository.GetByIdAsync(It.IsAny<long>())).Returns((long value) => { return Task.FromResult(_inv.FirstOrDefault(l => l.INV_ID == value)); });
+        }
+
+        [Given(@"the INV_STS_HST table will contain the following info:")]
+        public void GivenTheINV_STS_HSTTableWillContainTheFollowingInfo(Table table)
+        {
+            _invStsHist = table.CreateSet<INV_STS_HIST>().ToList();
+            _reposMock.Setup(r => r.InvStsHistRepository.GetAll()).Returns(_invStsHist.AsMockQueryableAsync().Object);
+        }
+
+        [Given(@"the following INV_IDEN_EXTRACT table info:")]
+        public void GivenTheFollowingINV_IDEN_EXTRACTTableInfo(Table table)
+        {
+            _invIdenExtract = table.CreateSet<INV_IDEN_EXTRACT>();
+            _reposMock.Setup(r => r.InvIdenExtractRepository.GetAll()).Returns(_invIdenExtract.AsMockQueryableAsync().Object);
+        }
+
+        [Given(@"the following REM_WH_TXN_HST table info:")]
+        public void GivenTheFollowingREM_WH_TXN_HSTTableInfo(Table table)
+        {
+            _remWhTxnHst = table.CreateSet<REM_WH_TXN_HST>();
+            _reposMock.Setup(r => r.RemWhTxnHstRepository.GetAll()).Returns(_remWhTxnHst.AsMockQueryableAsync().Object);
+        }
+
+        [Given(@"the following REM_WH_REF_ITEM table info:")]
+        public void GivenTheFollowingREM_WH_REF_ITEMTableInfo(Table table)
+        {
+            _remWhRefItem = table.CreateSet<REM_WH_REF_ITEM>();
+            _reposMock.Setup(r => r.RemWhRefItemRepository.GetAll()).Returns(_remWhRefItem.AsMockQueryableAsync().Object);
+        }
+
+        [Given(@"the following PYMT table info:")]
+        public void GivenTheFollowingPYMTTableInfo(Table table)
+        {
+            _pymt = table.CreateSet<PYMT>();
+            _reposMock.Setup(r => r.PymtRepository.GetAll()).Returns(_pymt.AsMockQueryableAsync().Object);
+        }
+
+        [Given(@"the following REF_ITEM table info:")]
+        public void GivenTheFollowingREF_ITEMTableInfo(Table table)
+        {
+            _refItem = table.CreateSet<REF_ITEM>().ToList();
+            _reposMock.Setup(r => r.RefItemRepository.GetAll()).Returns(_refItem.AsMockQueryableAsync().Object);
+        }
+
+        [When(@"the client makes a post request:")]
+        public async Task WhenTheClientMakesAPostRequest(Table table)
+        {
+            StructuremapMvc.Start();
+            _container = StructuremapMvc.StructureMapDependencyScope.Container;
+
+            _databaseService = _databaseServiceMock.Object;
+            _dataUnitOfWork = _reposMock.Object;
+
+            _container.Inject(_databaseService);
+            _container.Inject(_dataUnitOfWork);
+
+            IManager manager = _container.GetInstance<IManager>();
+            TransactionModel transaction = table.CreateSet<TransactionModel>().First();
+
+            _actualResponse = await manager.ExecuteAsync(transaction);
+
+            _container.Dispose();
+        }
+
+        [Then(@"the response message will be")]
+        public void ThenTheResponseMessageWillBe(Table table)
+        {
+            _actualResponse.StatusCode.ShouldBeEquivalentTo((HttpStatusCode)int.Parse(table.Rows?.ElementAt(0)?.ElementAt(0).Value ?? "500"));
+        }
+
+        [Then(@"the IR_EVENT_LOG will contain the following info:")]
+        public void ThenTheIR_EVENT_LOGWillContainTheFollowingInfo(Table table)
+        {
+            var expected = table.CreateSet<IR_EVENT_LOG>().FirstOrDefault();
+
+            _actualEventLog.ShouldBeEquivalentTo(expected, opt => (opt.Excluding(s => s.SelectedMemberPath.EndsWith("_TS") || s.SelectedMemberPath.EndsWith("_NM") || s.SelectedMemberPath.EndsWith("CUST_ID"))));
+        }
+
+        [Then(@"the REF_ITEM table will contain the following info:")]
+        public void ThenTheREF_ITEMTableWillContainTheFollowingInfo(Table table)
+        {
+            var expected = table.CreateSet<REF_ITEM>();
+
+            _refItem.ShouldBeEquivalentTo(expected, opt =>
+                 opt.Excluding(s => s.SelectedMemberPath.EndsWith("_TS"))
+                    .WithTracing());
+        }
+
+        [Then(@"the INV table will contain the following info:")]
+        public void ThenTheINVTableWillContainTheFollowingInfo(Table table)
+        {
+            var expected = table.CreateSet<INV>();
+
+            _inv.ShouldBeEquivalentTo(expected, opt =>
+                 opt.Excluding(s => s.SelectedMemberPath.EndsWith("_TS"))
+                    .WithTracing());
+        }
+
+        [Then(@"the INV_STS_HST table will contain the following info:")]
+        public void ThenTheINV_STS_HSTTableWillContainTheFollowingInfo(Table table)
+        {
+            var expected = table.CreateSet<INV_STS_HIST>();
+
+            _invStsHist.ShouldBeEquivalentTo(expected, opt =>
+                opt.Excluding(s => s.SelectedMemberPath.EndsWith("_TS"))
+                   .WithTracing());
+        }
+    }
+}
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using TechTalk.SpecFlow.Assist;
+
+namespace IR.Specification.Tests.Steps
+{
+    public class StringValueRetriver : IValueRetriever
+    {
+        public bool CanRetrieve(KeyValuePair<string, string> keyValuePair, Type targetType, Type propertyType)
+        {
+            return propertyType == typeof(string);
+        }
+
+        public object Retrieve(KeyValuePair<string, string> keyValuePair, Type targetType, Type propertyType)
+        {
+            return string.IsNullOrEmpty(keyValuePair.Value) ? null : keyValuePair.Value;
+        }
+    }
+}
