@@ -1,0 +1,30 @@
+﻿@{
+    ViewBag.Title = "RnL Property";
+}
+
+<div class="jumbotron">
+    @*<h1>RnL Property</h1>*@
+    <p class="lead">Providing families with quality homes.</p>
+    @*<p><a href="http://asp.net" class="btn btn-primary btn-lg">Learn more &raquo;</a></p>*@
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <h2>Available Properties</h2>
+        <p>
+            Click here for current listings of our homes
+        </p>
+        @*<p><a class="btn btn-default" href="http://go.microsoft.com/fwlink/?LinkId=301865">Learn more &raquo;</a></p>*@
+        <p>@Html.ActionLink("Properties", "Index", "Property", new { area = "" }, new { @class = "btn btn-primary" })</p>
+    </div>
+    <div class="col-md-4">
+        <h2>Rental Qualifications</h2>
+        <p>Click here to view our rental qualifications</p>
+        <p>@Html.ActionLink("How to qualify", "Qualifications", "Application", new { area = "" }, new { @class = "btn btn-primary" })</p>
+    </div>
+    <div class="col-md-4">
+        <h2>Contact Us</h2>
+        <p>Click here for our contact information</p>
+        <p>@Html.ActionLink("Contact", "Contact", "Home", new { area = "" }, new { @class = "btn btn-primary" })</p>
+    </div>
+</div>
